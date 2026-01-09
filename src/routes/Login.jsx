@@ -8,16 +8,16 @@ import Typography from '@mui/material/Typography';
 import Stack from '@mui/material/Stack';
 import MenuItem from '@mui/material/MenuItem';
 import CircularProgress from '@mui/material/CircularProgress';
+import Alert from '@mui/material/Alert';
 import { useAuthStore } from '../stores/authStore';
-// ❌ Removed 'shallow' import as it is no longer needed
 
 export const Login = () => {
   const navigate = useNavigate();
   
-  // ✅ FIXED: Select specific state pieces individually. 
-  // This prevents the "Maximum update depth exceeded" error.
   const login = useAuthStore((state) => state.login);
   const isLoading = useAuthStore((state) => state.isLoading);
+  const error = useAuthStore((state) => state.error);
+  const clearError = useAuthStore((state) => state.clearError);
   const availableRoles = useAuthStore((state) => state.availableRoles);
 
   const [form, setForm] = useState({
@@ -29,12 +29,24 @@ export const Login = () => {
   const handleChange = (event) => {
     const { name, value } = event.target;
     setForm((prev) => ({ ...prev, [name]: value }));
+    // Clear errors when user starts typing
+    if (error) clearError();
   };
 
   const handleSubmit = async (event) => {
     event.preventDefault();
-    await login(form);
-    navigate(`/${form.role.toLowerCase()}/dashboard`, { replace: true });
+    clearError();
+
+    try {
+      const user = await login(form);
+      // Navigation will happen based on the user's actual role from Firestore
+      if (user && user.role) {
+        navigate(`/${user.role.toLowerCase()}/dashboard`, { replace: true });
+      }
+    } catch (err) {
+      // Error is already handled in the store
+      console.error('Login error:', err);
+    }
   };
 
   return (
@@ -71,6 +83,13 @@ export const Login = () => {
               Access the EMR Connect control center
             </Typography>
           </div>
+          
+          {error && (
+            <Alert severity="error" onClose={clearError}>
+              {error}
+            </Alert>
+          )}
+
           <TextField
             name="email"
             label="Email"
@@ -79,6 +98,8 @@ export const Login = () => {
             required
             value={form.email}
             onChange={handleChange}
+            disabled={isLoading}
+            autoComplete="email"
           />
           <TextField
             name="password"
@@ -88,6 +109,8 @@ export const Login = () => {
             required
             value={form.password}
             onChange={handleChange}
+            disabled={isLoading}
+            autoComplete="current-password"
           />
           <TextField
             select
@@ -96,6 +119,8 @@ export const Login = () => {
             value={form.role}
             onChange={handleChange}
             fullWidth
+            disabled={isLoading}
+            helperText="Select the role you registered with"
           >
             {availableRoles.map((role) => (
               <MenuItem key={role} value={role}>
